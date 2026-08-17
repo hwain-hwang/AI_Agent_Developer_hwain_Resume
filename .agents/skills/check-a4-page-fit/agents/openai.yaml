@@ -1,4 +1,4 @@
 interface:
   display_name: "A4 페이지 적합성 검사"
-  short_description: "A4 인쇄 페이지 사용률과 실제 넘침을 함께 계산하고 검증"
-  default_prompt: "Use $check-a4-page-fit to calculate each A4 page utilization and verify the 100% print preview."
+  short_description: "실제 Ctrl+P 출력과 A4 페이지 사용률 추정을 함께 검증"
+  default_prompt: "Use $check-a4-page-fit to verify the actual Ctrl+P page count and compare it with the A4 utilization estimate."

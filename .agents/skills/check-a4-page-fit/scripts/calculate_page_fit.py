@@ -26,6 +26,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-margin", type=float, default=11)
     parser.add_argument("--bottom-margin", type=float, default=11)
     parser.add_argument("--safe-limit", type=float, default=95)
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=100,
+        help="Print scaling percentage shown by the selected print path.",
+    )
     return parser.parse_args()
 
 
@@ -40,10 +46,13 @@ def main() -> None:
         raise SystemExit("Printable height must be greater than zero.")
     if not 0 < args.safe_limit <= 100:
         raise SystemExit("Safe limit must be greater than 0 and at most 100.")
+    if not 0 < args.scale <= 200:
+        raise SystemExit("Print scale must be greater than 0 and at most 200.")
 
     used_mm = to_mm(args.used, args.unit)
     delta_mm = to_mm(args.delta, args.unit)
-    projected_mm = used_mm + delta_mm
+    unscaled_projected_mm = used_mm + delta_mm
+    projected_mm = unscaled_projected_mm * args.scale / 100
     usage_percent = projected_mm / printable_mm * 100
     remaining_mm = printable_mm - projected_mm
 
@@ -55,9 +64,13 @@ def main() -> None:
         status = "SAFE"
 
     result = {
+        "estimate_only": True,
+        "basis": "theoretical_a4_css_content_box",
         "printable_height_mm": round(printable_mm, 2),
         "used_height_mm": round(used_mm, 2),
         "delta_mm": round(delta_mm, 2),
+        "unscaled_projected_height_mm": round(unscaled_projected_mm, 2),
+        "print_scale_percent": round(args.scale, 2),
         "projected_height_mm": round(projected_mm, 2),
         "usage_percent": round(usage_percent, 2),
         "remaining_mm": round(remaining_mm, 2),

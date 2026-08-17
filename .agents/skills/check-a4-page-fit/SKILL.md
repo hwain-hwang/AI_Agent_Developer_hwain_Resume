@@ -1,54 +1,57 @@
 ---
 name: check-a4-page-fit
-description: A4 HTML/CSS 문서의 페이지별 사용률, 남은 높이, 요소 이동 후 적합 여부와 실제 인쇄 페이지 수를 검증한다. 이력서·포트폴리오·인쇄용 HTML이 A4에 들어가는지, 페이지가 늘어나는지, 섹션을 다른 페이지로 옮겨도 되는지 확인할 때 사용한다.
+description: A4 HTML/CSS 문서의 실제 Ctrl+P 미리보기와 저장 PDF를 최종 기준으로 페이지 수·잘림·요소 이동을 검증하고, 페이지별 사용률과 남은 높이의 CSS 수치 추정을 보조로 제공한다. 이력서·포트폴리오·인쇄용 HTML이 실제 출력 경로에서 A4에 들어가는지 확인할 때 사용한다.
 ---
 
 # A4 페이지 적합성 검사
 
 ## 기준
 
-- 이 프로젝트의 A4 높이는 `297mm`, 위·아래 여백은 각각 `11mm`, 본문 높이는 `275mm`다.
-- CSS 픽셀 변환은 `1mm = 96 / 25.4px`이며, `275mm ≈ 1039.37px`다.
-- `@page` 세로 여백이 바뀌면 본문 높이를 `297 - 위 여백 - 아래 여백`으로 다시 계산한다.
-- 기준 배율은 `100%`다. 사용자 지정 배율은 별도 조건으로만 보고한다.
-- 현재 HTML과 로드가 끝난 폰트로만 측정한다.
+- 사용자가 선택한 `Ctrl+P` 프린터의 미리보기와 그 경로로 저장한 PDF를 최종 판정 기준으로 사용한다.
+- 이 프로젝트의 이론상 A4 높이는 `297mm`, 위·아래 CSS 여백은 각각 `11mm`, 본문 높이는 `275mm`다.
+- `275mm` 계산과 Chrome CDP 결과는 사전 추정치다. OS 프린터의 자동 맞춤·여백·배율을 재현하지 못하면 실제 페이지 수로 단정하지 않는다.
+- `@page` 세로 여백이 바뀌면 이론상 본문 높이를 `297 - 위 여백 - 아래 여백`으로 다시 계산한다.
 
 ## 검사 절차
 
-1. `Ctrl+P`에서 용지를 A4, 배율을 100%로 설정한다.
-2. 실제 페이지 수, 잘림, 빈 페이지, 카드 강제 이동, 제목·본문 분리를 확인한다.
-3. Chrome CDP에서 `Emulation.setEmulatedMedia({ media: "print" })`를 적용하고 `document.fonts.ready`를 기다린 뒤, 각 `.page`의 `getBoundingClientRect().height`를 측정한다.
-4. 페이지별 사용률을 계산한다.
+1. HTML을 새로고침하고 열려 있던 인쇄 미리보기를 닫은 뒤 다시 연다.
+2. 실제 사용할 프린터, A4, 세로 방향을 선택하고 대화상자에 표시되는 배율·여백 설정을 기록한다. 값이 보이지 않으면 임의로 100%라고 가정하지 않는다.
+   - Chrome의 Windows 인쇄 UI가 배율을 숨기면 활성 프로필의 `%LOCALAPPDATA%\Google\Chrome\User Data\<프로필>\Preferences`에서 `printing.print_preview_sticky_settings.appState`의 `scaling`, `scalingType`, `scalingTypePdf`를 함께 확인한다.
+   - Chrome 151에서는 적용 대상의 type이 `4`(`CUSTOM`)일 때만 `scaling` 값을 사용한다. 다른 버전은 Chromium enum을 확인하며, type이 기본값이면 남아 있는 `scaling` 문자열을 적용하지 않는다.
+   - 활성 프로필을 식별하지 못하면 배율을 `미확인`으로 보고하고 수치 판정을 확정하지 않는다.
+3. `Ctrl+P`에서 실제 페이지 수, 잘림, 빈 페이지, 카드 강제 이동, 제목·본문 분리를 확인한다.
+4. 같은 경로로 PDF를 저장해 페이지 수와 페이지별 콘텐츠를 다시 확인한다.
+5. 인쇄 미디어와 폰트 로딩을 적용한 DOM 높이로 수치 추정을 계산한다.
 
-   `사용률 = 사용한 콘텐츠 높이 / 275mm × 100`
+   `추정 사용률(%) = 사용한 콘텐츠 높이 × (인쇄 배율 / 100) / 275mm × 100`
 
-5. 요소 이동 전에는 다음 값을 모두 포함해 예상 높이를 계산한다.
+6. 요소 이동 전에는 margin과 간격을 포함한다.
 
    `예상 높이 = 현재 사용 높이 + 이동 요소의 margin 포함 높이 + 새 간격 - 제거되는 높이`
 
-6. `scripts/calculate_page_fit.py`로 수치를 판정한다.
+7. 계산 스크립트를 실행한다.
 
    ```powershell
-   python .agents/skills/check-a4-page-fit/scripts/calculate_page_fit.py --used 900 --delta 100 --unit px
+   python .agents/skills/check-a4-page-fit/scripts/calculate_page_fit.py --used 900 --delta 100 --unit px --scale 81
    ```
 
-7. 변경 후 `Ctrl+P`와 수치 계산을 모두 다시 실행한다.
+8. 변경 후 1~7단계를 다시 실행한다.
 
-브라우저 자동 검증은 `Page.printToPDF`에 `preferCSSPageSize: true`, `printBackground: true`, `scale: 1`을 사용한다.
+Chrome CDP 자동 검증은 실제 출력 설정을 동일하게 재현할 수 있을 때만 보조로 사용한다. `Page.printToPDF`를 사용할 때는 `preferCSSPageSize: true`, `printBackground: true`를 명시하고 적용한 `scale` 값을 함께 보고한다.
 
 ## 판정
 
-- `SAFE`: 사용률 95% 이하
-- `TIGHT`: 95% 초과 100% 이하. 폰트·줄바꿈 차이에 취약하므로 인쇄 결과를 반드시 재확인한다.
-- `OVERFLOW`: 100% 초과. 이동하거나 압축해야 한다.
-- 수치가 100% 이하라도 `page-break-inside: avoid`, `.page-break`, 폰트 로딩 때문에 페이지가 늘 수 있다. 실제 인쇄 결과가 우선이다.
-- 두 검사 중 하나라도 실패하면 A4 적합으로 판정하지 않는다.
+- 실제 미리보기와 저장 PDF가 목표 페이지 수이고 잘림·빈 페이지·의도하지 않은 분할이 없으면 `적합`이다.
+- 확인된 인쇄 배율을 반영한 수치 추정은 `SAFE`(95% 이하), `TIGHT`(95% 초과 100% 이하), `OVERFLOW`(100% 초과)로 표시한다.
+- 실제 출력과 수치 추정이 다르면 `계산 불일치`로 기록하고 프린터·배율·여백·자동 맞춤 차이를 확인한다. 수치 추정으로 실제 페이지 수를 덮어쓰지 않는다.
+- 미리보기의 DOM 배치가 현재 HTML과 다르면 새로고침 후 처음부터 다시 검사한다.
 
 ## 결과 보고 형식
 
 ```text
-페이지 1: 사용률 00.0% | 남은 높이 00.0mm | SAFE/TIGHT/OVERFLOW
-페이지 2: 사용률 00.0% | 남은 높이 00.0mm | SAFE/TIGHT/OVERFLOW
-Ctrl+P: A4 100% | 총 0장 | 잘림/강제 이동 여부
-결론: 적합/부적합과 필요한 조치
+실제 출력: <프린터> | A4 <표시된 배율/배율 미표시> | 총 0장 | 적합/부적합
+페이지 상태: 잘림/빈 페이지/강제 이동/제목·본문 분리 여부
+수치 추정: 페이지 1 00.0% | 페이지 2 00.0% | SAFE/TIGHT/OVERFLOW
+비교: 일치/계산 불일치와 원인
+결론: 최종 페이지 수와 필요한 조치
 ```
